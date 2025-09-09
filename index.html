@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mirror Symmetry Sketch</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        #gameContainer {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            border: 4px solid #ffffff;
+            border-radius: 15px;
+            overflow: hidden;
+            background: #ffffff;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        #overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+            width: 90%;
+            max-width: 500px;
+        }
+        #overlay.hidden {
+            display: none;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 18px;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px;
+            transition: background 0.3s;
+        }
+        #startBtn {
+            background: #10b981;
+            color: white;
+        }
+        #startBtn:hover {
+            background: #059669;
+        }
+        #clearBtn {
+            background: #f59e0b;
+            color: white;
+        }
+        #clearBtn:hover {
+            background: #d97706;
+        }
+        #scoreDisplay {
+            font-size: 20px;
+            color: #ffd700;
+        }
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            #gameContainer {
+                width: 90vw;
+                height: 60vh;
+            }
+            #overlay {
+                padding: 20px;
+                width: 95%;
+            }
+            button {
+                padding: 10px 20px;
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1 class="text-4xl mb-4 text-center">Mirror Symmetry Sketch Adventure</h1>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="overlay">
+            <h2 class="text-2xl mb-4">Mirror Symmetry Challenge</h2>
+            <p class="text-lg mb-6">Draw on the left side, and watch it mirror perfectly on the right! Complete the symmetrical object to advance. Avoid the obstacles that appear mirrored.</p>
+            <p>Use mouse or touch to draw. Aim for symmetry!</p>
+            <button id="startBtn">Start Sketching</button>
+        </div>
+        <div id="overlay" class="hidden">
+            <h2 class="text-2xl mb-4">Level Complete!</h2>
+            <p id="scoreDisplay">Symmetry Score: 100% | Obstacles Dodged: 5</p>
+            <button id="clearBtn">Next Level</button>
+        </div>
+    </div>
+    <div id="score">Accuracy: <span id="accuracy">0%</span> | Obstacles: <span id="obstacles">0</span></div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 800;
+        canvas.height = 600;
+
+        let drawing = false;
+        let mirrorLine = canvas.width / 2;
+        let playerPath = [];
+        let targetPath = [];
+        let obstacles = [];
+        let level = 1;
+        let symmetryScore = 0;
+        let obstaclesDodged = 0;
+        let gameActive = false;
+        let accuracy = 0;
+
+        const overlayStart = document.getElementById('overlay');
+        const startBtn = document.getElementById('startBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const accuracyDisplay = document.getElementById('accuracy');
+        const obstaclesDisplay = document.getElementById('obstacles');
+
+        // Define target shapes (simple symmetrical objects)
+        const targets = [
+            // Simple heart shape
+            [{ x: 200, y: 300 }, { x: 220, y: 280 }, { x: 240, y: 260 }, { x: 260, y: 280 }, { x: 280, y: 300 }],
+            // Star
+            [{ x: 200, y: 260 }, { x: 250, y: 370 }, { x: 300, y: 260 }, { x: 200, y: 370 }, { x: 300, y: 370 }]
+        ];
+
+        function drawMirrorLine() {
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(mirrorLine, 0);
+            ctx.lineTo(mirrorLine, canvas.height);
+            ctx.stroke();
+        }
+
+        function drawObstacles() {
+            obstacles.forEach(obstacle => {
+                ctx.fillStyle = '#ef4444';
+                ctx.beginPath();
+                ctx.arc(obstacle.x, obstacle.y, obstacle.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        function generateObstacles() {
+            obstacles = [];
+            for (let i = 0; i < level + 2; i++) {
+                obstacles.push({
+                    x: mirrorLine + Math.random() * (canvas.width - mirrorLine - 50) + 25,
+                    y: Math.random() * canvas.height,
+                    radius: 15
+                });
+            }
+        }
+
+        function checkCollision(x, y) {
+            for (let obs of obstacles) {
+                if (Math.sqrt((x - obs.x) ** 2 + (y - obs.y) ** 2) < obs.radius) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function drawSymmetrically(startX, startY, endX, endY) {
+            // Draw on left side
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+            playerPath.push({ x: startX, y: startY }, { x: endX, y: endY });
+
+            // Mirror to right side
+            const mirroredStartX = mirrorLine + (mirrorLine - startX);
+            const mirroredEndX = mirrorLine + (mirrorLine - endX);
+            ctx.beginPath();
+            ctx.moveTo(mirroredStartX, startY);
+            ctx.lineTo(mirroredEndX, endY);
+            ctx.stroke();
+            playerPath.push({ x: mirroredStartX, y: startY }, { x: mirroredEndX, y: endY });
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (!gameActive) return;
+            drawing = true;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            if (x > mirrorLine) return; // Only draw on left
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            lastX = x;
+            lastY = y;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!drawing || !gameActive) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            if (x > mirrorLine) {
+                drawing = false;
+                return;
+            }
+            if (checkCollision(x, y)) {
+                drawing = false;
+                clearCanvas();
+                return;
+            }
+            drawSymmetrically(lastX, lastY, x, y);
+            lastX = x;
+            lastY = y;
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            drawing = false;
+            checkCompletion();
+        });
+
+        // Touch support for mobile
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const x = touch.clientX - rect.left;
+            const y = touch.clientY - rect.top;
+            if (x > mirrorLine || drawing) return;
+            drawing = true;
+            lastX = x;
+            lastY = y;
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (!drawing) return;
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const x = touch.clientX - rect.left;
+            const y = touch.clientY - rect.top;
+            if (x > mirrorLine) return;
+            if (checkCollision(x, y)) {
+                drawing = false;
+                clearCanvas();
+                return;
+            }
+            drawSymmetrically(lastX, lastY, x, y);
+            lastX = x;
+            lastY = y;
+        });
+
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            drawing = false;
+            checkCompletion();
+        });
+
+        function drawTarget() {
+            ctx.strokeStyle = '#10b981';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            const target = targets[level - 1];
+            for (let i = 0; i < target.length - 1; i++) {
+                ctx.moveTo(target[i].x, target[i].y);
+                ctx.lineTo(target[i+1].x, target[i+1].y);
+                // Mirror
+                ctx.moveTo(mirrorLine + (mirrorLine - target[i].x), target[i].y);
+                ctx.lineTo(mirrorLine + (mirrorLine - target[i+1].x), target[i+1].y);
+            }
+            ctx.stroke();
+        }
+
+        function checkCompletion() {
+            // Simple accuracy check: count matching segments
+            let matches = 0;
+            const target = targets[level - 1];
+            playerPath.forEach(p => {
+                target.forEach(t => {
+                    if (Math.abs(p.x - t.x) < 20 && Math.abs(p.y - t.y) < 20) matches++;
+                });
+            });
+            accuracy = Math.min(100, (matches / target.length) * 100);
+            accuracyDisplay.textContent = Math.round(accuracy) + '%';
+            obstaclesDisplay.textContent = obstaclesDodged;
+            if (accuracy >= 80) {
+                symmetryScore++;
+                level++;
+                overlayStart.classList.remove('hidden');
+                overlayStart.innerHTML = '<h2 class="text-2xl mb-4">Level Complete!</h2><p>Symmetry Score: ' + symmetryScore + ' | Obstacles Dodged: ' + obstaclesDodged + '</p><button id="clearBtn">Next Level</button>';
+                clearBtn = overlayStart.querySelector('#clearBtn');
+                clearBtn.addEventListener('click', startGame);
+            }
+        }
+
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawMirrorLine();
+            drawTarget();
+            drawObstacles();
+            playerPath = [];
+        }
+
+        function startGame() {
+            gameActive = true;
+            overlayStart.classList.add('hidden');
+            clearCanvas();
+            generateObstacles();
+            obstaclesDodged = 0; // Reset
+        }
+
+        startBtn.addEventListener('click', startGame);
+
+        // Initial setup
+        drawMirrorLine();
+        drawTarget();
+        generateObstacles();
+        drawObstacles();
+    </script>
+</body>
+</html>
+</content>
+</create_file>
